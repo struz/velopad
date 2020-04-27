@@ -10,3 +10,11 @@ The server is responsible for parsing the raw serial data from the server and bo
 npm install
 npm run start
 ```
+
+## Development without an Arduino
+
+You can run with dummy data by using a different start script. This means you don't have to have the Arduino connected to develop against.
+
+```
+npm run start-dev
+```
