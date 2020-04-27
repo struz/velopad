@@ -7,6 +7,7 @@ import CommandLineArgs from 'command-line-args';
 
 import Debug from './debug';
 import DataMocker, { MOCK_TICK_RATE_MILLIS } from './mockdata';
+import { SENSOR_DATA_START_BYTES } from './const';
 
 const SERVER_PORT = 8080
 const ARDUINO_VENDOR_ID = '2341';
@@ -14,7 +15,7 @@ const ARDUINO_VENDOR_ID = '2341';
 let ArduinoPort: SerialPort | undefined = undefined;
 const connectedClients = new Map<String, WebSocket.connection>();
 
-// Enable debugging outputs
+// Set debug level
 Debug.enabled = false;
 
 function setupSignalHandlers() {
@@ -36,10 +37,10 @@ function setupSignalHandlers() {
 
 function forwardDataToClients(data: string) {
   // First work out if this data is meaningful
-  if (!data.startsWith("SD:")) {
+  if (!data.startsWith(SENSOR_DATA_START_BYTES)) {
     return;
   }
-  data = data.substring(3).trimRight();
+  data = data.substring(SENSOR_DATA_START_BYTES.length);
 
   connectedClients.forEach((connection) => {
     connection.send(data);
@@ -56,7 +57,7 @@ const options = CommandLineArgs(optionDefinitions);
 
 // Do setup in a promise since there are asynchronous bits we want to finish
 // before starting our server
-new Promise((resolve, reject) => {
+new Promise((resolve) => {
   if (options.mockserial) {
     console.log('Mocking data to clients...')
     // Mock the serial data

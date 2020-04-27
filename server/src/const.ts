@@ -1,0 +1,1 @@
+export const SENSOR_DATA_START_BYTES = "SD ";

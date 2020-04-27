@@ -9,7 +9,7 @@ describe('SensorDataStoragen', () => {
   const sdc = new SensorDataStorage();
 
   for (let i = 0; i < NUM_DATA_ENTRIES; i++) {
-    sdc.putSensorData(new RawSensorData(`${i} ${i} ${i} ${i}`), i * DEBUG_REPORT_MILLIS_TICK);
+    sdc.putSensorData(new RawSensorData(`${i * DEBUG_REPORT_MILLIS_TICK} ${i} ${i} ${i} ${i}`));
   }
 
   it('returns full sensor data correctly', () => {

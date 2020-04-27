@@ -33,12 +33,12 @@ class SensorDataStorage {
     }
   }
 
-  putSensorData(rawSensorData: RawSensorData, millis: number) {
+  putSensorData(rawSensorData: RawSensorData) {
     const currentTime = new Date().getTime();
     for (let i = 0; i <= SensorDirection.Right; i++) {
-      const dirSensorData = rawSensorData.get(i);
+      const dirSensorData = rawSensorData.getSensorReading(i);
       // Add data to main storage
-      this.sensorData[i].push([millis, dirSensorData]);
+      this.sensorData[i].push([rawSensorData.getTimestampMillis(), dirSensorData]);
       // Add data to consumer streams
       this.consumerDataStreams[i].forEach((dataStream) => {
         dataStream.push([currentTime, dirSensorData]);

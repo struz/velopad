@@ -16,11 +16,11 @@ class App extends React.Component {
   render() {
     return (
       <div className="App">
-        <p>Y axis lines are 1 second apart</p>
+        <p>X axis lines are 1 second apart</p>
         <PressureChart width={640} height={200} title="Left" sensorDataStorage={this.storage} sensorDir={SensorDirection.Left} />
         <PressureChart width={640} height={200} title="Down" sensorDataStorage={this.storage} sensorDir={SensorDirection.Down} />
         <PressureChart width={640} height={200} title="Up" sensorDataStorage={this.storage} sensorDir={SensorDirection.Up} />
-        <PressureChart width={640} height={200} title="Right" sensorDataStorage={this.storage} sensorDir={SensorDirection.Right} />
+        <PressureChart width={640} height={200} title="Right" sensorDataStorage={this.storage} sensorDir={SensorDirection.Right} activationThreshold={90} />
       </div>
     );
   }
