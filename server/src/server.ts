@@ -7,7 +7,6 @@ import CommandLineArgs from 'command-line-args';
 
 import Debug from './debug';
 import DataMocker, { MOCK_TICK_RATE_MILLIS } from './mockdata';
-import { SENSOR_DATA_START_BYTES } from './const';
 
 const SERVER_PORT = 8080
 const ARDUINO_VENDOR_ID = '2341';
@@ -36,12 +35,6 @@ function setupSignalHandlers() {
 }
 
 function forwardDataToClients(data: string) {
-  // First work out if this data is meaningful
-  if (!data.startsWith(SENSOR_DATA_START_BYTES)) {
-    return;
-  }
-  data = data.substring(SENSOR_DATA_START_BYTES.length);
-
   connectedClients.forEach((connection) => {
     connection.send(data);
   })
@@ -137,7 +130,23 @@ new Promise((resolve) => {
     Debug.log(`Received connection from origin ${request.origin}`);
     // Accept the connection and give it an ID
     const connection = request.accept('velopad', request.origin);
-    connectedClients.set(uuid(), connection);
+    const connectionUuid = uuid();
+    connectedClients.set(connectionUuid, connection);
+
+    // Remove the client from connected clients once it's closed
+    connection.on('close', () => {
+      connectedClients.delete(connectionUuid);
+    });
+    // Setup message handling from client -> arduino
+    connection.on('message', data => {
+      if (data.type !== 'utf8') {
+        return;
+      }
+      if (ArduinoPort !== undefined) {
+        // Forward the command as we received it
+        ArduinoPort.write(data.utf8Data as string);
+      }
+    });
   });
 });
 

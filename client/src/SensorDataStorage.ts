@@ -3,6 +3,7 @@ import RawSensorData from "./RawSensorData";
 import { DEBUG_REPORT_MILLIS_TICK } from "./SensorDataConnection";
 import uuid from 'uuid-random';
 import SensorDataStream from "./SensorDataStream";
+import SensorThreshold from "./SensorThreshold";
 
 export const DEBUG_REPORTS_PER_SECOND = (1000 / DEBUG_REPORT_MILLIS_TICK);
 // To save memory we garbage collect data storage when we are more than 1.5x this retention value
@@ -13,23 +14,34 @@ export type SensorDataArray = Array<SensorData>;
 // SensorData = [Milliseconds that reading was taken at, reading value]
 export type SensorData = [number, number];
 
-export interface SensorDataStreamSubscription {
+export interface ISensorDataStreamSubscription {
   uuid: string;
   dataStream: SensorDataStream;
 }
 
+export interface ISensorValuesEvent {
+  // LDUR order
+  sensorPressThresholds: Array<number>;
+  sensorReleaseThresholds: Array<number>;
+}
+
 class SensorDataStorage {
   // One array of sensor data per direction, initialised in constructor
-  private sensorData = new Array<SensorDataArray>(SensorDirection.Up + 1);
+  // TODO: periodically clean up the big sensor data array, and support dumping to file
+  private sensorData = new Array<SensorDataArray>();
   // Consumers subscribe and get their own data stream which is updated
   // as new data comes in. This allows for streaming data to graphs.
   // Separate per-consumer to stop write tampering.
   private consumerDataStreams = new Array<Map<string, SensorDataArray>>();
+  // Last sensor threshold values we were told about from the Microcontroller
+  private sensorThresholds = new Array<SensorThreshold>();
 
   constructor() {
+    // Initialise all our storage structures for all directions
     for (let i = 0; i <= SensorDirection.Right; i++) {
-      this.sensorData[i] = new Array<SensorData>();
-      this.consumerDataStreams[i] = new Map<string, SensorDataArray>();
+      this.sensorData.push(new Array<SensorData>());
+      this.consumerDataStreams.push(new Map<string, SensorDataArray>());
+      this.sensorThresholds.push(new SensorThreshold(-1, -1));
     }
   }
 
@@ -78,9 +90,7 @@ class SensorDataStorage {
 
   // Get a subscription to an array of sensor data that will be updated automatically
   // when new data for that sensor direction comes in.
-  // Streams don't use Arduino millisecond readings, instead logging the real time
-  // for each addition.
-  getSensorDataSubscription(dir: SensorDirection): SensorDataStreamSubscription {
+  newSensorDataSubscription(dir: SensorDirection): ISensorDataStreamSubscription {
     const subscriptionUuid = uuid();
     const dataSubscription = new Array<SensorData>();
     // Add an empty data array - new data will be appended to it, thus streamed to the subscriber
@@ -90,8 +100,19 @@ class SensorDataStorage {
       dataStream: new SensorDataStream(dataSubscription),
     };
   }
+  deleteSensorDataSubscription(dir: SensorDirection, subscriptionUuid: string) {
+    this.consumerDataStreams[dir].delete(subscriptionUuid);
+  }
 
-  // TODO: unsubscribe function via uuid
+  // Update the last known sensor value thresholds
+  updateSensorThresholds(thresholds: Array<SensorThreshold>) {
+    thresholds.forEach((sensorThresholds, i) => {
+      this.sensorThresholds[i] = sensorThresholds.clone();
+    });
+  }
+  getSensorThreshold(dir: SensorDirection) {
+    return this.sensorThresholds[dir].clone();
+  }
 }
 
 export default SensorDataStorage;
