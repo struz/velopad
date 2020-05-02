@@ -6,9 +6,45 @@ import MicrocontrollerEventDispatcher from './MicrocontrollerEventDispatcher';
 
 
 const CHART_DATA_UPDATE_RATE_MILLIS = 50;
+const CHART_GARBAGE_COLLECT_RATE_MILLIS = 1000;
 const CHART_DELAY_MILLIS = 0;
 const CHART_Y_MIN_VALUE = 0;
 // const CHART_Y_MAX_VALUE = 850;
+const CHART_MILLIS_PER_PIXEL = 10;
+
+const CHART_SENSOR_DATA_LINE_THICKNESS = 2;
+const CHART_SENSOR_UNPRESSED_COLOR = '#00ff00'
+const CHART_SENSOR_PRESSED_COLOR = '#0000ff'
+
+
+class TimeSeriesMeta {
+  private timeSeries: Smoothie.TimeSeries;
+  private lastUpdatedMillis: number;
+  private lastEntry?: [number, number];
+  // Buffer to ensure we aren't deleting lines on the screen too early
+  private static shownMillisBuffer = 500;
+
+  constructor(timeSeries: Smoothie.TimeSeries) {
+    this.timeSeries = timeSeries;
+    this.lastUpdatedMillis = Date.now();
+  }
+
+  append(timestamp: number, value: number) {
+    this.timeSeries.append(timestamp, value);
+    this.lastUpdatedMillis = timestamp;
+    this.lastEntry = [timestamp, value];
+  }
+  getLastUpdated() { return this.lastUpdatedMillis; }
+  getLastEntry() {
+    return this.lastEntry;
+  }
+
+  // Returns true if the last touched data point is on the chart, false otherwise
+  stillShownOnChart(chartWidthMillis: number) {
+    return this.lastUpdatedMillis >= (Date.now() - chartWidthMillis) - TimeSeriesMeta.shownMillisBuffer;
+  }
+}
+
 
 interface PressureChartProps {
   width: number;
@@ -20,31 +56,33 @@ interface PressureChartProps {
   eventDispatcher: MicrocontrollerEventDispatcher;
 }
 
-interface PressureChartState {
-  series: any;
-  options: any;
-}
 
-class PressureChart extends React.Component<PressureChartProps, PressureChartState> {
+class PressureChart extends React.Component<PressureChartProps> {
   private sensorDataProvider: SensorDataStorage;
   private sensorDir: SensorDirection;
   private sensorPressThreshold = -1;
   private sensorReleaseThreshold = -1;
+  private sensorPressed = false;
 
   // Data streams and event subscriptions
-  private intervalID = -1;
+  private fetchDataIntervalID = -1;
+  private gcChartIntervalID = -1;
   private eventDispatcher: MicrocontrollerEventDispatcher;
   private sdStreamSub?: ISensorDataStreamSubscription;
   private stEventSub?: string;
 
+  // Display related variables
   private canvas: HTMLCanvasElement | undefined;
   private setCanvasRef: (element: HTMLCanvasElement) => any;
   private width: number;
   private height: number;
-
   private chart: Smoothie.SmoothieChart;
-  // Sensor data time series, displayed on the smoothie chart
-  private timeSeries = new Smoothie.TimeSeries();
+
+  // Sensor data time series, displayed on the smoothie chart.
+  // We use an array so we can use multiple time series to change the colour of the line
+  // during presses and depresses of the sensor. The latest created one is always at the
+  // end of this list.
+  private sdTimeSeries = new Array<TimeSeriesMeta>();
   // Sensor threshold time series, displayed as a horizontal line on the smoothie chart
   private pressThresholdTimeSeries = new Smoothie.TimeSeries();
   private releaseThresholdTimeSeries = new Smoothie.TimeSeries();
@@ -61,7 +99,7 @@ class PressureChart extends React.Component<PressureChartProps, PressureChartSta
     }
 
     this.chart = new Smoothie.SmoothieChart({
-      millisPerPixel: 10,
+      millisPerPixel: CHART_MILLIS_PER_PIXEL,
       //scaleSmoothing: 1,
       tooltip: true,
       grid: {millisPerLine:1000,verticalSections:5},
@@ -76,10 +114,53 @@ class PressureChart extends React.Component<PressureChartProps, PressureChartSta
     }
   }
 
+  // Returns the number of milliseconds that can be shown across the whole width of the chart
+  getChartWidthMillis() {
+    return this.width * CHART_MILLIS_PER_PIXEL;
+  }
+
+  collectChartGarbage() {
+    // Because this is ordered we can just find the last element that
+    // should be garbage collected, and collect it and everything before it.
+    let lastElementIndex = -1;
+    for (let i = this.sdTimeSeries.length - 1; i >= 0; i--) {
+      if (!this.sdTimeSeries[i].stillShownOnChart(this.getChartWidthMillis())) {
+        lastElementIndex = i;
+        break;
+      }
+    }
+    if (lastElementIndex >= 0) {
+      // Keep only the non-GCable elements
+      this.sdTimeSeries = this.sdTimeSeries.slice(lastElementIndex + 1);
+      console.log('garbage was collected');
+    }
+  }
+
   updateSensorThresholds() {
     const sensorThresholds = this.sensorDataProvider.getSensorThreshold(this.sensorDir);
     this.sensorPressThreshold = sensorThresholds.getPressThreshold();
     this.sensorReleaseThreshold = sensorThresholds.getReleaseThreshold();
+  }
+
+  pushNewSensorDataTimeseries() {
+    const ts = new Smoothie.TimeSeries();
+
+    // To make the transition look smooth we need to include the last point of the previous
+    // time series, so it draws a line. Otherwise there's just a gap between points.
+    // TODO: need to add a dummy data point in at the exact point of the threshold line so
+    // we get the colour change on that line
+    if (this.sdTimeSeries.length > 0) {
+      const lastEntry = this.sdTimeSeries[this.sdTimeSeries.length - 1].getLastEntry();
+      if (lastEntry) {
+        ts.append(lastEntry[0], lastEntry[1]);
+      }
+    }
+
+    this.sdTimeSeries.push(new TimeSeriesMeta(ts));
+    this.chart.addTimeSeries(ts, {
+      lineWidth: CHART_SENSOR_DATA_LINE_THICKNESS,
+      strokeStyle: this.sensorPressed ? CHART_SENSOR_PRESSED_COLOR : CHART_SENSOR_UNPRESSED_COLOR,
+    });
   }
 
   componentDidMount() {
@@ -87,26 +168,24 @@ class PressureChart extends React.Component<PressureChartProps, PressureChartSta
       throw new Error('canvas could not be found at runtime, react docs lied!')
     }
 
+    // Set up our chart paramters - series added later draw over the top of series added earlier
+    this.chart.addTimeSeries(this.releaseThresholdTimeSeries, {lineWidth: 1.5, strokeStyle:'#ffff00'})
+    this.chart.addTimeSeries(this.pressThresholdTimeSeries, {lineWidth: 1.5, strokeStyle:'#ff0000'})
+    // Initial sensor data time series
+    this.pushNewSensorDataTimeseries();
+
     // When we receive an update to the sensor threshold values, fetch them from storage.
-    // Set this callback up before we create the chart data population callback function
-    // to avoid a spike in values from the default -1 to the actual value. It looks weird.
     this.eventDispatcher.subscribeSensorThresholdsReceived(() => {
       this.updateSensorThresholds();
     });
     // Make sure our current ones are up to date to avoid any race condition
     this.updateSensorThresholds();
 
-    // Set up our chart paramters - series added later draw over the top of series added earlier
-    this.chart.addTimeSeries(this.timeSeries, {lineWidth: 2, strokeStyle:'#00ff00'});
-    this.chart.addTimeSeries(this.releaseThresholdTimeSeries, {lineWidth: 1.5, strokeStyle:'#ffff00'})
-    this.chart.addTimeSeries(this.pressThresholdTimeSeries, {lineWidth: 1.5, strokeStyle:'#ff0000'})
-    this.chart.streamTo(this.canvas, CHART_DELAY_MILLIS);
-
+    
     // Subscribe to the data stream for our sensor
     this.sdStreamSub = this.sensorDataProvider.newSensorDataSubscription(this.sensorDir);
-
     // Pull updates from the data stream at roughly the rate it's being updated
-    this.intervalID = window.setInterval(() => {
+    this.fetchDataIntervalID = window.setInterval(() => {
       // Get the latest millis in one of the sensor data
       const newSensorData = this.sdStreamSub?.dataStream.getNewData();
       if (newSensorData?.length === 0) {
@@ -115,21 +194,47 @@ class PressureChart extends React.Component<PressureChartProps, PressureChartSta
       }
 
       newSensorData?.forEach(sd => {
-        this.timeSeries.append(sd[0], sd[1]);
-        if (this.sensorPressThreshold) {
+        // Conditional colouring based on whether the sensor is firing or not
+        // TODO: turn this into a value sent from the microcontroller, rather than a calculated one
+        // for more specific debugging
+        // TODO: manage the lifecycles of all the timeseries we need to create here - if a timeseries
+        // last update time is off the graph, remove it.
+        // Unfortunately we need a new timeseries per time we go over/under the threshold otherwise
+        // it draws an ugly line to link up the data points...
+        if (this.sensorPressed && sd[1] >= this.sensorReleaseThreshold) {
+          this.sensorPressed = false;
+          this.pushNewSensorDataTimeseries();
+        } else if (!this.sensorPressed && sd[1] < this.sensorPressThreshold) {
+          this.sensorPressed = true;
+          this.pushNewSensorDataTimeseries();
+        }
+        this.sdTimeSeries[this.sdTimeSeries.length - 1].append(sd[0], sd[1]);
+        // >= 0 is to stop -1 showing up on the graph at the beginning. It looks weird.
+        if (this.sensorPressThreshold >= 0) {
           this.pressThresholdTimeSeries.append(sd[0], this.sensorPressThreshold);
         }
-        if (this.sensorReleaseThreshold) {
+        if (this.sensorReleaseThreshold >= 0) {
           this.releaseThresholdTimeSeries.append(sd[0], this.sensorReleaseThreshold);
         }
       });
     }, CHART_DATA_UPDATE_RATE_MILLIS);
+
+    // Set up garbage collection for old series
+    this.gcChartIntervalID = window.setInterval(() => {
+      this.collectChartGarbage();
+    }, CHART_GARBAGE_COLLECT_RATE_MILLIS);
+
+    // Start drawing the chart
+    this.chart.streamTo(this.canvas, CHART_DELAY_MILLIS);
   }
 
   componentWillUnmount() {
     // Unsubscribe from all the things we subscribed to
-    if (this.intervalID !== -1) {
-      clearInterval(this.intervalID);
+    if (this.fetchDataIntervalID !== -1) {
+      clearInterval(this.fetchDataIntervalID);
+    }
+    if (this.gcChartIntervalID !== -1) {
+      clearInterval(this.gcChartIntervalID);
     }
     if (this.sdStreamSub) {
       this.sensorDataProvider.deleteSensorDataSubscription(this.sensorDir, this.sdStreamSub.uuid);
@@ -138,6 +243,9 @@ class PressureChart extends React.Component<PressureChartProps, PressureChartSta
     if (this.stEventSub) {
       this.eventDispatcher.unsubscribeSensorThresholdsReceived(this.stEventSub);
     }
+
+    // Stop streaming the chart
+    this.chart.stop();
   }
 
   render() {

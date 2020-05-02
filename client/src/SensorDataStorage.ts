@@ -26,6 +26,9 @@ export interface ISensorValuesEvent {
 }
 
 class SensorDataStorage {
+  // Difference in time between the microcontroller and us
+  private timeDifferenceMillis?: number;
+
   // One array of sensor data per direction, initialised in constructor
   // TODO: periodically clean up the big sensor data array, and support dumping to file
   private sensorData = new Array<SensorDataArray>();
@@ -46,14 +49,24 @@ class SensorDataStorage {
   }
 
   putSensorData(rawSensorData: RawSensorData) {
-    const currentTime = new Date().getTime();
+    const currentTimeMillis = Date.now();
+
+    // Store the time difference between us and the microcontroller the first time we get
+    // sensor data from it. This will break the graphs if the microcontroller restarts.
+    if (this.timeDifferenceMillis === undefined) {
+      // TODO: make this robust by having a synchronisation message we can send to periodically
+      // keep it in sync
+      this.timeDifferenceMillis = currentTimeMillis - rawSensorData.getTimestampMillis();
+    }
+    const graphTimeMillis = rawSensorData.getTimestampMillis() + this.timeDifferenceMillis;
+
     for (let i = 0; i <= SensorDirection.Right; i++) {
       const dirSensorData = rawSensorData.getSensorReading(i);
       // Add data to main storage
       this.sensorData[i].push([rawSensorData.getTimestampMillis(), dirSensorData]);
       // Add data to consumer streams
       this.consumerDataStreams[i].forEach((dataStream) => {
-        dataStream.push([currentTime, dirSensorData]);
+        dataStream.push([graphTimeMillis, dirSensorData]);
       });
     }
   }
