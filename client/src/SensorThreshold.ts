@@ -1,6 +1,7 @@
+import { NUM_SENSORS } from "./SensorConst";
+
 const SENSOR_SEP_CHAR = ' ';
 const THRESHOLD_SEP_CHAR = ',';
-const NUM_SENSORS = 4;
 
 class SensorThreshold {
   private pressThreshold: number;

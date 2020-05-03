@@ -11,8 +11,8 @@ export const SPIKE_GRAPH_RETENTION_SECONDS = 60;
 export const SPIKE_GRAPH_RETENTION_ENTRIES = SPIKE_GRAPH_RETENTION_SECONDS * DEBUG_REPORTS_PER_SECOND;
 
 export type SensorDataArray = Array<SensorData>;
-// SensorData = [Milliseconds that reading was taken at, reading value]
-export type SensorData = [number, number];
+// SensorData = [Milliseconds that reading was taken at, reading value, currently pressed true/false]
+export type SensorData = [number, number, boolean];
 
 export interface ISensorDataStreamSubscription {
   uuid: string;
@@ -62,11 +62,12 @@ class SensorDataStorage {
 
     for (let i = 0; i <= SensorDirection.Right; i++) {
       const dirSensorData = rawSensorData.getSensorReading(i);
+      const dirSensorState = rawSensorData.getPressedState(i);
       // Add data to main storage
-      this.sensorData[i].push([rawSensorData.getTimestampMillis(), dirSensorData]);
+      this.sensorData[i].push([rawSensorData.getTimestampMillis(), dirSensorData, dirSensorState]);
       // Add data to consumer streams
       this.consumerDataStreams[i].forEach((dataStream) => {
-        dataStream.push([graphTimeMillis, dirSensorData]);
+        dataStream.push([graphTimeMillis, dirSensorData, dirSensorState]);
       });
     }
   }

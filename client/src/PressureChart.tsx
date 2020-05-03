@@ -6,7 +6,7 @@ import MicrocontrollerEventDispatcher from './MicrocontrollerEventDispatcher';
 
 
 const CHART_DATA_UPDATE_RATE_MILLIS = 50;
-const CHART_GARBAGE_COLLECT_RATE_MILLIS = 1000;
+const CHART_GARBAGE_COLLECT_RATE_MILLIS = 5000;
 const CHART_DELAY_MILLIS = 0;
 const CHART_Y_MIN_VALUE = 0;
 // const CHART_Y_MAX_VALUE = 850;
@@ -42,6 +42,9 @@ class TimeSeriesMeta {
   // Returns true if the last touched data point is on the chart, false otherwise
   stillShownOnChart(chartWidthMillis: number) {
     return this.lastUpdatedMillis >= (Date.now() - chartWidthMillis) - TimeSeriesMeta.shownMillisBuffer;
+  }
+  removeFromChart(chart: Smoothie.SmoothieChart) {
+    chart.removeTimeSeries(this.timeSeries);
   }
 }
 
@@ -129,7 +132,12 @@ class PressureChart extends React.Component<PressureChartProps> {
         break;
       }
     }
+
     if (lastElementIndex >= 0) {
+      // Remove old time series from the chart
+      for (let i = 0; i <= lastElementIndex; i++) {
+        this.sdTimeSeries[i].removeFromChart(this.chart);
+      }
       // Keep only the non-GCable elements
       this.sdTimeSeries = this.sdTimeSeries.slice(lastElementIndex + 1);
       console.log('garbage was collected');
@@ -142,18 +150,14 @@ class PressureChart extends React.Component<PressureChartProps> {
     this.sensorReleaseThreshold = sensorThresholds.getReleaseThreshold();
   }
 
-  pushNewSensorDataTimeseries() {
+  pushNewSensorDataTimeseries(finalDataValue?: number, finalDataMillis?: number) {
     const ts = new Smoothie.TimeSeries();
 
-    // To make the transition look smooth we need to include the last point of the previous
-    // time series, so it draws a line. Otherwise there's just a gap between points.
-    // TODO: need to add a dummy data point in at the exact point of the threshold line so
-    // we get the colour change on that line
-    if (this.sdTimeSeries.length > 0) {
-      const lastEntry = this.sdTimeSeries[this.sdTimeSeries.length - 1].getLastEntry();
-      if (lastEntry) {
-        ts.append(lastEntry[0], lastEntry[1]);
-      }
+    // To make the transition look smooth we need to include the start of this new time series as
+    // the last point of the previous time series, so the line is continuous.
+    // Otherwise there's just a gap between points.
+    if (finalDataValue !== undefined && finalDataMillis !== undefined) {
+      this.sdTimeSeries[this.sdTimeSeries.length - 1].append(finalDataValue, finalDataMillis);
     }
 
     this.sdTimeSeries.push(new TimeSeriesMeta(ts));
@@ -194,22 +198,21 @@ class PressureChart extends React.Component<PressureChartProps> {
       }
 
       newSensorData?.forEach(sd => {
-        // Conditional colouring based on whether the sensor is firing or not
-        // TODO: turn this into a value sent from the microcontroller, rather than a calculated one
-        // for more specific debugging
-        // TODO: manage the lifecycles of all the timeseries we need to create here - if a timeseries
-        // last update time is off the graph, remove it.
+        // Conditional colouring of the sensor data line based on whether the sensor is firing or not.
         // Unfortunately we need a new timeseries per time we go over/under the threshold otherwise
-        // it draws an ugly line to link up the data points...
-        if (this.sensorPressed && sd[1] >= this.sensorReleaseThreshold) {
+        // it draws an ugly line to link up the old data points of the old series...
+        if (this.sensorPressed && !sd[2]) {
           this.sensorPressed = false;
-          this.pushNewSensorDataTimeseries();
-        } else if (!this.sensorPressed && sd[1] < this.sensorPressThreshold) {
+          this.pushNewSensorDataTimeseries(sd[0], sd[1]);
+        } else if (!this.sensorPressed && sd[2]) {
           this.sensorPressed = true;
-          this.pushNewSensorDataTimeseries();
+          this.pushNewSensorDataTimeseries(sd[0], sd[1]);
         }
+        // Add the new data to the relevant timeseries
         this.sdTimeSeries[this.sdTimeSeries.length - 1].append(sd[0], sd[1]);
-        // >= 0 is to stop -1 showing up on the graph at the beginning. It looks weird.
+
+        // Only draw the sensor thresholds if we've received them from the microcontroller, otherwise
+        // we're drawing at -1 which looks weird and isn't very informational.
         if (this.sensorPressThreshold >= 0) {
           this.pressThresholdTimeSeries.append(sd[0], this.sensorPressThreshold);
         }

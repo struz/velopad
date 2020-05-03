@@ -1,12 +1,12 @@
 import { SENSOR_DATA_START_BYTES } from "./const";
 
 // Streams over and over again to simulate sensor data
-export const MOCK_DATA = `600 600 600 600
-602 601 599 598
-602 601 599 598
-606 600 590 600
-602 601 599 598
-600 600 600 600`
+export const MOCK_DATA = `600,F 600,F 600,F 600,F
+602,F 601,F 599,F 598,F
+602,F 601,F 599,F 598,F
+606,F 600,F 590,F 600,F
+602,F 601,F 599,F 598,F
+600,F 600,F 600,F 600,F`
 
 // How fast to send lines of mock data. Should match the Arduino rate for development
 // purposes.
