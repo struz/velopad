@@ -127,6 +127,13 @@ class SensorDataStorage {
   getSensorThreshold(dir: SensorDirection) {
     return this.sensorThresholds[dir].clone();
   }
+  getSensorThresholds() {
+    const thresholds: SensorThreshold[] = [];
+    this.sensorThresholds.forEach(threshold => {
+      thresholds.push(threshold);
+    });
+    return thresholds;
+  }
 }
 
 export default SensorDataStorage;

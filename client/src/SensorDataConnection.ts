@@ -1,5 +1,6 @@
 import WebSocket from 'websocket';
 import MicrocontrollerEventDispatcher from './MicrocontrollerEventDispatcher';
+import SensorThreshold from './SensorThreshold';
 
 // Keep this in sync with how often the Arduino is giving out debug information
 // so we can graph correctly.
@@ -97,6 +98,13 @@ class SensorDataConnection {
   }
   askSensorThresholds() {
     this.sendMessage(SENSOR_THRESHOLD_REQUEST_BYTES);
+  }
+  updateSensorThresholds(thresholds: Array<SensorThreshold>) {
+    let msg = SENSOR_THRESHOLD_UPDATE_BYTES;
+    thresholds.forEach(t => {
+      msg += ` ${t.toSerialString()}`;
+    });
+    this.sendMessage(msg + "\n");
   }
 
   disconnect() {

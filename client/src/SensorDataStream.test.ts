@@ -1,7 +1,7 @@
 import SensorDataStream from './SensorDataStream'
 import { SensorData } from './SensorDataStorage';
 
-const firstPush = [[0, 0], [1, 0], [0, 1], [0, 0]] as Array<SensorData>;
+const firstPush = [[0, 0, false], [1, 0, false], [0, 1, false], [0, 0, false]] as Array<SensorData>;
 
 describe('SensorDataStream', () => {
   const data = new Array<SensorData>();

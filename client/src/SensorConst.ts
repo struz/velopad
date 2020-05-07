@@ -7,3 +7,10 @@ export enum SensorDirection {
   // Must be the last value as we use this to loop over all the values in the enum
   Right
 }
+// Mirror the enum above, used to resolve names where it matters
+export const SENSOR_NAMES: string[] = [
+  'Left',
+  'Down',
+  'Up',
+  'Right'
+]

@@ -1,7 +1,9 @@
 import { NUM_SENSORS } from "./SensorConst";
 
+
 const SENSOR_SEP_CHAR = ' ';
 const THRESHOLD_SEP_CHAR = ',';
+
 
 class SensorThreshold {
   private pressThreshold: number;
@@ -15,6 +17,7 @@ class SensorThreshold {
   getPressThreshold() { return this.pressThreshold; }
   getReleaseThreshold() { return this.releaseThreshold; }
   clone() { return new SensorThreshold(this.pressThreshold, this.releaseThreshold); }
+  toSerialString() { return `${this.pressThreshold},${this.releaseThreshold}` ; }
 
   // Parse a raw data string into an LDUR array of SensorThresholds
   static parseRaw(rawData: string) {

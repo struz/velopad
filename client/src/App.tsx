@@ -3,8 +3,10 @@ import './App.css';
 import SensorDataConnection from './SensorDataConnection';
 import SensorDataStorage from './SensorDataStorage';
 import PressureChart from './PressureChart';
-import { SensorDirection } from './SensorConst';
+import { SensorDirection, SENSOR_NAMES } from './SensorConst';
 import MicrocontrollerEventDispatcher from './MicrocontrollerEventDispatcher';
+import SensorThresholdPicker from './SensorThresholdPicker';
+import SensorThreshold from './SensorThreshold';
 
 // Debugging
 declare global {
@@ -24,9 +26,16 @@ class App extends React.Component {
     this.storage  = new SensorDataStorage();
     this.eventDispatcher = new MicrocontrollerEventDispatcher(this.storage);
     this.dataConnection = new SensorDataConnection('ws://localhost:8080', this.eventDispatcher);
+
+    this.updateThresholds = this.updateThresholds.bind(this);
+
     // Debugging
     window.dataConnection = this.dataConnection;
     window.storage = this.storage;
+  }
+
+  updateThresholds(thresholds: Array<SensorThreshold>) {
+    this.dataConnection.updateSensorThresholds(thresholds);
   }
 
   componentDidMount() {
@@ -44,15 +53,13 @@ class App extends React.Component {
   render() {
     return (
       <div className="App">
+        <SensorThresholdPicker eventDispatcher={this.eventDispatcher} storage={this.storage} onSendThresholdUpdate={this.updateThresholds} />
         <p>X axis lines are 1 second apart</p>
-        <PressureChart width={640} height={175} title="Left" sensorDataStorage={this.storage}
-         sensorDir={SensorDirection.Left} eventDispatcher={this.eventDispatcher} />
-        <PressureChart width={640} height={175} title="Down" sensorDataStorage={this.storage}
-         sensorDir={SensorDirection.Down} eventDispatcher={this.eventDispatcher} />
-        <PressureChart width={640} height={175} title="Up" sensorDataStorage={this.storage}
-         sensorDir={SensorDirection.Up} eventDispatcher={this.eventDispatcher} />
-        <PressureChart width={640} height={175} title="Right" sensorDataStorage={this.storage}
-         sensorDir={SensorDirection.Right} eventDispatcher={this.eventDispatcher} />
+        {/* Loop over all directions and make a chart */}
+        {[...Array(SensorDirection.Right + 1)].map((_, i) => {
+          return <PressureChart width={640} height={175} title={SENSOR_NAMES[i]} sensorDataStorage={this.storage}
+                  sensorDir={i} eventDispatcher={this.eventDispatcher} key={SENSOR_NAMES[i]} />
+        })}
       </div>
     );
   }

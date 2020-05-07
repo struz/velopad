@@ -179,7 +179,7 @@ class PressureChart extends React.Component<PressureChartProps> {
     this.pushNewSensorDataTimeseries();
 
     // When we receive an update to the sensor threshold values, fetch them from storage.
-    this.eventDispatcher.subscribeSensorThresholdsReceived(() => {
+    this.stEventSub = this.eventDispatcher.subscribeSensorThresholdsReceived(() => {
       this.updateSensorThresholds();
     });
     // Make sure our current ones are up to date to avoid any race condition
