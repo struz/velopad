@@ -1,4 +1,5 @@
 import React from 'react';
+import './PressureChart.css';
 import SensorDataStorage, { ISensorDataStreamSubscription } from './SensorDataStorage';
 import { SensorDirection } from './SensorConst';
 import * as Smoothie from 'smoothie';
@@ -292,7 +293,8 @@ class PressureChart extends React.Component<PressureChartProps> {
 
   render() {
     return (
-      <div>
+      <div className="PressureChart">
+        <span className="ChartTitle">{this.props.title}</span>
         <div id="chart">
           <canvas ref={this.setCanvasRef} width={this.width} height={this.height} />
         </div>

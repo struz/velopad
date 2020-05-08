@@ -1,8 +1,13 @@
 import React from "react";
+import './SensorThresholdPicker.css';
 import MicrocontrollerEventDispatcher from "./MicrocontrollerEventDispatcher";
 import SensorDataStorage from "./SensorDataStorage";
 import SensorThreshold from "./SensorThreshold";
 import { SENSOR_NAMES, SensorDirection } from "./SensorConst";
+
+
+const MAX_SENSOR_VALUE = 1024
+const MIN_SENSOR_VALUE = -1
 
 
 // Simplified SensorThreshold for use in UI updates
@@ -101,20 +106,24 @@ class SensorThresholdPicker extends React.Component<SensorThresholdPickerProps, 
   render() {
     return (
       <div className="SensorThresholdPicker">
-        <div className="SensorThresholds">
+        <div className="SensorThresholdsHolder">
           {[...Array(SensorDirection.Right + 1)].map((_, i) => {
             return (
-              <div className="Sensor" key={SENSOR_NAMES[i]}>
+              <div className="SensorThresholds" key={SENSOR_NAMES[i]}>
                 <span className="SensorName">{this.state.thresholds[i].sensorName}</span>
-                <ValuePicker dir={i} label="Press" value={this.state.thresholds[i].pressThreshold} pressRelease={PressRelease.Press}
-                 onChange={this.thresholdChanged} />
-                <ValuePicker dir={i} label="Release" value={this.state.thresholds[i].releaseThreshold} pressRelease={PressRelease.Release}
-                 onChange={this.thresholdChanged} />
+                <div className="SensorThresholdsControls">
+                  <ValuePicker dir={i} label="Press" value={this.state.thresholds[i].pressThreshold} pressRelease={PressRelease.Press}
+                  onChange={this.thresholdChanged} />
+                  <ValuePicker dir={i} label="Release" value={this.state.thresholds[i].releaseThreshold} pressRelease={PressRelease.Release}
+                  onChange={this.thresholdChanged} />
+                 </div>
               </div>
             )
           })}
         </div>
-        <button onClick={this.sendThresholdsUpdate}>Update Thresholds</button>
+        <div>
+          <button onClick={this.sendThresholdsUpdate}>Update Thresholds</button>
+        </div>
       </div>
     );
   }
@@ -140,7 +149,8 @@ class ValuePicker extends React.PureComponent<ValuePickerProps> {
     return (
       <div className="SensorValuePicker">
         <span className="FormLabel">{this.props.label}</span>
-        <input type="number" value={this.props.value.toString()} onChange={this.onValueChange} />
+        <input className="NumberInput" type="number" max={MAX_SENSOR_VALUE} min={MIN_SENSOR_VALUE}
+         value={this.props.value.toString()} onChange={this.onValueChange} />
       </div>
     )
   }

@@ -1,0 +1,12 @@
+.PressureChart {
+  display: grid;
+  grid-template-columns: 50px max-content;
+  grid-gap: 7px;
+  justify-content: center;
+  text-align: right;
+}
+
+.ChartTitle {
+  margin-top: auto;
+  margin-bottom: auto;
+}
