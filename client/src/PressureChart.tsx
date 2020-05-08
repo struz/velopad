@@ -17,6 +17,26 @@ const CHART_SENSOR_UNPRESSED_COLOR = '#00ff00'
 const CHART_SENSOR_PRESSED_COLOR = '#0000ff'
 
 
+// Monkey patch the smoothie time formatter, since enabling the chart one adds timestamps along the
+// bottom, which make it harder to read the graph. We're doing this for the tooltip only.
+Smoothie.SmoothieChart.timeFormatter = function(date: Date) {
+  // Slightly modified from smoothie's default timestamp formatter
+  function pad(number: number, digits: number) { return number.toString().padStart(digits, '0'); }
+  return pad(date.getHours(), 2) + ':' + pad(date.getMinutes(), 2) + ':' + pad(date.getSeconds(), 2) + '.' + pad(date.getMilliseconds(), 3);
+}
+
+// Monkey patch smoothie stop function to keep showing tooltips after we stop animation
+Smoothie.SmoothieChart.prototype.stop = function() {
+  // @ts-ignore
+  if (this.frame) {
+    // @ts-ignore
+    Smoothie.SmoothieChart.AnimateCompatibility.cancelAnimationFrame(this.frame);
+    // @ts-ignore
+    delete this.frame;
+  }
+};
+
+
 class TimeSeriesMeta {
   private timeSeries: Smoothie.TimeSeries;
   private lastUpdatedMillis: number;
@@ -57,6 +77,7 @@ interface PressureChartProps {
   sensorDir: SensorDirection;
   activationThreshold?: number;
   eventDispatcher: MicrocontrollerEventDispatcher;
+  paused: boolean;
 }
 
 
@@ -123,6 +144,10 @@ class PressureChart extends React.Component<PressureChartProps> {
   }
 
   collectChartGarbage() {
+    if (this.props.paused) {
+      // No GC while paused, since we'll end up GCing stuff on the chart
+      return;
+    }
     // Because this is ordered we can just find the last element that
     // should be garbage collected, and collect it and everything before it.
     let lastElementIndex = -1;
@@ -167,6 +192,15 @@ class PressureChart extends React.Component<PressureChartProps> {
     });
   }
 
+  componentDidUpdate(prevProps: PressureChartProps) {
+    // The only prop we support changing is the paused state
+    if (this.props.paused && !prevProps.paused) {
+      this.chart.stop();
+    } else if (!this.props.paused && prevProps.paused) {
+      this.chart.start();
+    }
+  }
+
   componentDidMount() {
     if (this.canvas === undefined) {
       throw new Error('canvas could not be found at runtime, react docs lied!')
@@ -185,11 +219,16 @@ class PressureChart extends React.Component<PressureChartProps> {
     // Make sure our current ones are up to date to avoid any race condition
     this.updateSensorThresholds();
 
-    
     // Subscribe to the data stream for our sensor
     this.sdStreamSub = this.sensorDataProvider.newSensorDataSubscription(this.sensorDir);
     // Pull updates from the data stream at roughly the rate it's being updated
     this.fetchDataIntervalID = window.setInterval(() => {
+      if (this.props.paused) {
+        // No adding sensor data while paused since we'll pile up memory
+        // The data is still being collected anyway and will be copied in when we unpause
+        // with no loss.
+        return;
+      }
       // Get the latest millis in one of the sensor data
       const newSensorData = this.sdStreamSub?.dataStream.getNewData();
       if (newSensorData?.length === 0) {
