@@ -21,6 +21,9 @@ class App extends React.Component {
   private dataConnection: SensorDataConnection;
   private storage: SensorDataStorage;
   private graphsPaused = false;
+  private chartWidth = 640;
+  private chartHeight = 175;
+  private tooltipBufferHeight = 125;
 
   constructor(props: any) {
     super(props);
@@ -57,19 +60,21 @@ class App extends React.Component {
   componentWillUnmount() {
     this.dataConnection.disconnect();
   }
-  // TODO button onclick pause/unpause
 
   render() {
     return (
-      <div className="App">
+      /* Make the minimum height of the app based on the number of charts, so the tooltip for the lowest chart doesn't disappear off the bottom */
+      <div className="App" style={{minHeight: (this.chartHeight * (SensorDirection.Right + 1)) + this.tooltipBufferHeight}}>
+        <span>X axis lines are 1 second apart</span>
+        {/* Loop over all directions and make a chart */}
+        <div>
+          {[...Array(SensorDirection.Right + 1)].map((_, i) => {
+            return <PressureChart width={this.chartWidth} height={this.chartHeight} title={SENSOR_NAMES[i]} sensorDataStorage={this.storage}
+                    sensorDir={i} eventDispatcher={this.eventDispatcher} key={SENSOR_NAMES[i]} paused={this.graphsPaused} />
+          })}
+        </div>
         <button onClick={this.pauseUnpause}>Pause/Unpause</button>
         <SensorThresholdPicker eventDispatcher={this.eventDispatcher} storage={this.storage} onSendThresholdUpdate={this.updateThresholds} />
-        <p>X axis lines are 1 second apart</p>
-        {/* Loop over all directions and make a chart */}
-        {[...Array(SensorDirection.Right + 1)].map((_, i) => {
-          return <PressureChart width={640} height={175} title={SENSOR_NAMES[i]} sensorDataStorage={this.storage}
-                  sensorDir={i} eventDispatcher={this.eventDispatcher} key={SENSOR_NAMES[i]} paused={this.graphsPaused} />
-        })}
       </div>
     );
   }

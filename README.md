@@ -22,6 +22,8 @@ npm run start
 ```
 4. Open a web browser and visit `http://localhost:3000/`
 
+5. Get a Claire to sit on the stepladder bar
+
 ## Planned features
 
 - sensor weight profiles saved to browser local cache that can be applied for different players
